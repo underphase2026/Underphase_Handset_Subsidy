@@ -4,7 +4,6 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 description = 'Underphase_Handset Subsidy'
 
@@ -26,9 +25,10 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'org.jsoup:jsoup:1.15.4'
+	implementation 'org.jsoup:jsoup:1.17.2'
 	implementation 'org.seleniumhq.selenium:selenium-java:latest.release'
 	implementation 'io.github.bonigarcia:webdrivermanager:5.6.3'
+	implementation 'com.google.code.gson:gson:2.11.0'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 	annotationProcessor 'org.projectlombok:lombok'
