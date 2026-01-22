@@ -24,16 +24,25 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'org.jsoup:jsoup:1.17.2'
-	implementation 'org.seleniumhq.selenium:selenium-java:latest.release'
-	implementation 'io.github.bonigarcia:webdrivermanager:5.6.3'
-	implementation 'com.google.code.gson:gson:2.11.0'
-	compileOnly 'org.projectlombok:lombok'
+// Web & JPA
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	// MariaDB
 	runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
+
+	// Crawling (Jsoup & Selenium)
+	implementation 'org.jsoup:jsoup:1.17.2'
+	implementation 'org.seleniumhq.selenium:selenium-java'
+	implementation 'io.github.bonigarcia:webdrivermanager:5.6.3'
+
+	// Utils
+	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
-	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	implementation 'com.google.code.gson:gson:2.11.0'
+
+	// Test
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 tasks.named('test') {
