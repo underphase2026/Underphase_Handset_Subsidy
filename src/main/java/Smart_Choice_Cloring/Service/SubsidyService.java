@@ -2,52 +2,115 @@ package Smart_Choice_Cloring.Service;
 
 import Smart_Choice_Cloring.Entity.Subsidy;
 import Smart_Choice_Cloring.Repository.SubsidyRepository;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import java.io.IOException;
+import org.openqa.selenium.*;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class SubsidyService {
-
     private final SubsidyRepository subsidyRepository;
-    private final String URL = "https://m.smartchoice.or.kr/smc/mobile/dantongList.do?type=m";
+    private final WebDriver driver;
 
     @Transactional
     public void crawlAndSaveSubsidies() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        JavascriptExecutor js = (JavascriptExecutor) driver;
+        String targetPhone = "[5G] 갤럭시 A17 ZEM폰 포켓피스"; // 검색 대상 기기명 고정
+
         try {
-            // 1. 해당 URL의 HTML 문서 가져오기
-            Document doc = Jsoup.connect(URL).get();
+            // 1. MariaDB 초기화
+            subsidyRepository.deleteAll();
+            driver.get("https://m.smartchoice.or.kr/smc/mobile/dantongList.do?type=m");
 
-            // 2. 데이터가 포함된 테이블의 행(tr) 선택 (사이트 구조에 따라 셀렉터 수정 필요)
-            // 스마트초이스 모바일 페이지의 리스트 항목을 타겟팅합니다.
-            Elements rows = doc.select(".list_type01 li");
+            // 2. 제조사 선택 (정확한 ID: dan_Mau)
+            WebElement makerSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("select#dan_Mau")));
+            new Select(makerSelect).selectByValue("삼성전자");
+            System.out.println(">>> 제조사 선택 완료");
 
-            for (Element row : rows) {
-                // 각 항목에서 통신사, 기기명, 지원금액 등을 추출
-                String telecom = row.select(".telecom").text();
-                String device = row.select(".device_name").text();
-                String plan = row.select(".plan").text();
-                String amount = row.select(".price").text();
+            // 3. 휴대폰 선택 팝업 오픈
+            WebElement phoneBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("product_btn")));
+            phoneBtn.click();
 
-                // 3. 엔티티 생성 및 DB 저장
-                Subsidy subsidy = Subsidy.builder()
-                        .telecom(telecom)
-                        .deviceName(device)
-                        .planName(plan)
-                        .supportAmount(amount)
-                        .build();
+            // 4. 팝업 내에서 기기 클릭
+            WebElement phoneItem = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.xpath("//span[contains(text(), '" + targetPhone + "')]")
+            ));
+            js.executeScript("arguments[0].click();", phoneItem);
+            System.out.println(">>> 기기 선택 완료");
 
-                subsidyRepository.save(subsidy);
+            // 5. [선택하기] 버튼 클릭 (ID: selectPhone)
+            WebElement selectConfirmBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("selectPhone")));
+            js.executeScript("arguments[0].click();", selectConfirmBtn);
+            System.out.println(">>> [선택하기] 버튼 클릭 완료");
+
+            // 6. 요금수준 선택 (전체보기: value="all")
+            WebElement planSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("select#plan5GChoice")));
+            new Select(planSelect).selectByValue("all");
+            System.out.println(">>> 요금제 '전체보기' 선택 완료");
+
+            // 7. [검색] 버튼 클릭
+            WebElement searchBtn = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("a.h_btn.fill.size_l")));
+            js.executeScript("arguments[0].click();", searchBtn);
+
+            // 8. 결과 데이터 추출
+            // 결과가 뜰 때까지 대기
+            wait.until(ExpectedConditions.presenceOfElementLocated(By.className("dantong_resultbox")));
+
+            List<WebElement> resultBlocks = driver.findElements(By.className("dantong_resultbox"));
+            System.out.println(">>> 검색 결과 블록 수: " + resultBlocks.size());
+
+            for (WebElement block : resultBlocks) {
+                List<WebElement> rows = block.findElements(By.tagName("tr"));
+                String currentPlanName = "기본";
+
+                for (WebElement row : rows) {
+                    // th 태그에서 요금제 구간 확인
+                    List<WebElement> ths = row.findElements(By.tagName("th"));
+                    if (!ths.isEmpty()) {
+                        String thText = ths.get(0).getText().trim();
+
+                        if (thText.contains("만원")) {
+                            currentPlanName = thText;
+                        }
+
+                        // '번호이동' 행 데이터 추출
+                        if (thText.equals("번호이동")) {
+                            List<WebElement> tds = row.findElements(By.tagName("td"));
+
+                            // 인덱스 0(SKT), 1(KT), 2(LGU+)
+                            if (tds.size() >= 3) {
+                                saveSubsidy(targetPhone, currentPlanName + "(번호이동)", "SKT", tds.get(0).getText());
+                                saveSubsidy(targetPhone, currentPlanName + "(번호이동)", "KT", tds.get(1).getText());
+                                saveSubsidy(targetPhone, currentPlanName + "(번호이동)", "LGU+", tds.get(2).getText());
+                            }
+                        }
+                    }
+                }
             }
-        } catch (IOException e) {
+            System.out.println(">>> [성공] " + targetPhone + " 데이터 저장 완료!");
+
+        } catch (Exception e) {
+            System.err.println(">>> 크롤링 실패: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("크롤링 중 오류가 발생했습니다.");
         }
+    }
+
+    private void saveSubsidy(String device, String plan, String telecom, String amount) {
+        if (amount == null || amount.isEmpty() || amount.contains("해당사항 없음") || amount.equals("-")) return;
+
+        subsidyRepository.save(Subsidy.builder()
+                .telecom(telecom)
+                .deviceName(device)
+                .planName(plan)
+                .supportAmount(amount)
+                .build());
     }
 }
