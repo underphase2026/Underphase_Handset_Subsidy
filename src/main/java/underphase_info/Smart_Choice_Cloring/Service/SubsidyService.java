@@ -1,7 +1,7 @@
-package Smart_Choice_Cloring.Service;
+package underphase_info.Smart_Choice_Cloring.Service;
 
-import Smart_Choice_Cloring.Entity.Subsidy;
-import Smart_Choice_Cloring.Repository.SubsidyRepository;
+import underphase_info.Smart_Choice_Cloring.Entity.Subsidy;
+import underphase_info.Smart_Choice_Cloring.Repository.SubsidyRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.openqa.selenium.*;

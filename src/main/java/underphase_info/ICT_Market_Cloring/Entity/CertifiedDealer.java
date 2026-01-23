@@ -1,4 +1,4 @@
-package ICT_Market_Cloring.Entity;
+package underphase_info.ICT_Market_Cloring.Entity;
 
 import jakarta.persistence.*;
 import lombok.*;

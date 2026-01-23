@@ -1,6 +1,6 @@
-package Smart_Choice_Cloring.Controller;
+package underphase_info.Smart_Choice_Cloring.Controller;
 
-import Smart_Choice_Cloring.Service.SubsidyService;
+import underphase_info.Smart_Choice_Cloring.Service.SubsidyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

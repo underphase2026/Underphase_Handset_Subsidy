@@ -1,4 +1,4 @@
-package Smart_Choice_Cloring.Entity;
+package underphase_info.Smart_Choice_Cloring.Entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
