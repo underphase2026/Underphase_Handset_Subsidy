@@ -27,57 +27,47 @@ public class SubsidyService {
         JavascriptExecutor js = (JavascriptExecutor) driver;
 
         try {
-            subsidyRepository.deleteAll(); //
             driver.get(TARGET_URL);
 
-            // 1. 제조사 리스트 확보
             wait.until(ExpectedConditions.presenceOfElementLocated(By.id("dan_Mau")));
             List<WebElement> makerOptions = new Select(driver.findElement(By.id("dan_Mau"))).getOptions();
             List<String> makerNames = new ArrayList<>();
             for (WebElement opt : makerOptions) {
-                String text = opt.getText();
-                if (!text.contains("제조사") && !text.isEmpty()) makerNames.add(text);
+                String text = opt.getText().trim();
+                if (!text.contains("제조사") && !text.isEmpty() && !text.equals("기타")) {
+                    makerNames.add(text);
+                }
             }
-
-            System.out.println(">>> 전수조사 시작: " + makerNames);
 
             for (String makerName : makerNames) {
                 System.out.println("\n>>> [" + makerName + "] 수집 시작...");
 
-                for (int attempt = 0; attempt < 1000; attempt++) { // 기기별 루프
+                for (int attempt = 0; attempt < 1000; attempt++) {
                     try {
-                        // 매번 페이지를 새로 고침하여 'stale element' 및 팝업 꼬임 방지
                         driver.get(TARGET_URL);
-
-                        // 제조사 선택
                         WebElement makerSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.id("dan_Mau")));
                         new Select(makerSelect).selectByVisibleText(makerName);
                         Thread.sleep(800);
 
-                        // 휴대폰 팝업 열기
                         WebElement prodBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("product_btn")));
                         js.executeScript("arguments[0].click();", prodBtn);
 
-                        // 현재 순서(attempt)에 해당하는 기기 찾기
                         wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.id("spanPhone_name")));
                         List<WebElement> phones = driver.findElements(By.id("spanPhone_name"));
 
-                        if (attempt >= phones.size()) break; // 해당 제조사 기기 수집 끝
+                        if (attempt >= phones.size()) break;
 
                         WebElement targetPhone = phones.get(attempt);
                         String phoneName = targetPhone.getText();
                         System.out.print(">>> (" + (attempt + 1) + "/" + phones.size() + ") [" + phoneName + "] 수집 중... ");
 
-                        // 기기 클릭 및 [선택하기] 클릭
                         js.executeScript("arguments[0].click();", targetPhone);
                         Thread.sleep(300);
                         js.executeScript("arguments[0].click();", driver.findElement(By.id("selectPhone")));
 
-                        // 팝업이 닫힐 때까지 대기
-                        Thread.sleep(500);
-                        handleAlert(); // "휴대폰을 선택해주세요" 경고창 방어
+                        Thread.sleep(800);
+                        handleAlert();
 
-                        // 요금제 '전체보기' 및 검색
                         String planId = phoneName.contains("LTE") ? "planLTEChoice" : "plan5GChoice";
                         try {
                             WebElement planSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.id(planId)));
@@ -89,9 +79,8 @@ public class SubsidyService {
                         js.executeScript("danAllSearch('mobile');");
                         handleAlert();
 
-                        // 결과 테이블 파싱 및 저장
                         wait.until(ExpectedConditions.presenceOfElementLocated(By.className("dantong_resultbox")));
-                        parseAndSave(phoneName);
+                        parseAndSave(phoneName, makerName);
                         System.out.println("성공!");
 
                     } catch (Exception e) {
@@ -100,14 +89,11 @@ public class SubsidyService {
                     }
                 }
             }
-            System.out.println("\n>>> [전수조사 완료] 모든 데이터를 저장했습니다!");
-
         } catch (Exception e) {
             System.err.println(">>> 치명적 오류: " + e.getMessage());
         }
     }
 
-    // 예기치 못한 경고창(Alert)을 끄는 메서드
     private void handleAlert() {
         try {
             Alert alert = driver.switchTo().alert();
@@ -115,32 +101,64 @@ public class SubsidyService {
         } catch (Exception ignored) {}
     }
 
-    private void parseAndSave(String phoneName) {
+    private void parseAndSave(String phoneName, String makerName) {
         List<WebElement> resultBlocks = driver.findElements(By.className("dantong_resultbox"));
         for (WebElement block : resultBlocks) {
             List<WebElement> rows = block.findElements(By.tagName("tr"));
-            String currentPlan = "구간확인";
+            String currentRange = "구간확인";
+            String currentPlanName = "알수없음";
+
             for (WebElement row : rows) {
                 List<WebElement> ths = row.findElements(By.tagName("th"));
-                if (!ths.isEmpty()) {
-                    String thText = ths.get(0).getText().trim();
-                    if (thText.contains("만원")) currentPlan = thText;
-                    if (thText.equals("번호이동")) {
-                        List<WebElement> tds = row.findElements(By.tagName("td"));
-                        if (tds.size() >= 3) {
-                            saveSubsidy(phoneName, currentPlan + "(번호이동)", "SKT", tds.get(0).getText());
-                            saveSubsidy(phoneName, currentPlan + "(번호이동)", "KT", tds.get(1).getText());
-                            saveSubsidy(phoneName, currentPlan + "(번호이동)", "LGU+", tds.get(2).getText());
-                        }
-                    }
+                List<WebElement> tds = row.findElements(By.tagName("td"));
+
+                if (ths.isEmpty() || tds.isEmpty()) continue;
+
+                StringBuilder rowHeaderBuilder = new StringBuilder();
+                for (WebElement th : ths) rowHeaderBuilder.append(th.getText()).append(" ");
+                String rowHeaderText = rowHeaderBuilder.toString();
+
+                if (rowHeaderText.contains("만원")) {
+                    currentRange = rowHeaderText.trim();
+                    try {
+                        WebElement nameSpan = row.findElement(By.cssSelector("span.name"));
+                        currentPlanName = nameSpan.getText().trim();
+                    } catch (NoSuchElementException ignored) {}
+                }
+
+                String supportType = null;
+                if (rowHeaderText.contains("번호이동")) supportType = "번호이동";
+                else if (rowHeaderText.contains("기기변경")) supportType = "기기변경";
+
+                if (supportType != null && tds.size() >= 3) {
+                    int size = tds.size();
+                    saveSubsidy(makerName, phoneName, currentPlanName, currentRange, supportType, "SKT", tds.get(size - 3).getText());
+                    saveSubsidy(makerName, phoneName, currentPlanName, currentRange, supportType, "KT", tds.get(size - 2).getText());
+                    saveSubsidy(makerName, phoneName, currentPlanName, currentRange, supportType, "LGU+", tds.get(size - 1).getText());
                 }
             }
         }
     }
 
-    private void saveSubsidy(String device, String plan, String telecom, String amount) {
-        if (amount == null || amount.isEmpty() || amount.contains("해당사항 없음") || amount.equals("-")) return;
-        subsidyRepository.save(Subsidy.builder()
-                .telecom(telecom).deviceName(device).planName(plan).supportAmount(amount).build());
+    private void saveSubsidy(String maker, String device, String plan, String range, String type, String telecom, String amount) {
+        if (amount == null || amount.isEmpty() || amount.contains("-") || amount.contains("해당사항")) return;
+
+        String cleanAmount = amount.replaceAll("[^0-9]", "");
+        if (cleanAmount.isEmpty()) return;
+
+        // [중복 체크] DB에 동일한 데이터가 없을 때만 저장
+        if (!subsidyRepository.existsByMakerAndDeviceNameAndPlanNameAndPlanRangeAndSupportTypeAndTelecom(
+                maker, device, plan, range, type, telecom)) {
+
+            subsidyRepository.save(Subsidy.builder()
+                    .maker(maker)
+                    .deviceName(device)
+                    .planName(plan)
+                    .planRange(range)
+                    .supportType(type)
+                    .telecom(telecom)
+                    .supportAmount(cleanAmount)
+                    .build());
+        }
     }
 }
