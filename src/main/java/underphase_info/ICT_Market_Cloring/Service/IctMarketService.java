@@ -23,20 +23,20 @@ public class IctMarketService {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         JavascriptExecutor js = (JavascriptExecutor) driver;
 
-        // 수집 순서: 경남 -> 울산 -> 부산
         String[] targetRegions = {"경상남도", "울산광역시", "부산광역시"};
 
         try {
+            // 전체 수집 건수 카운트
+            int totalSaved = 0;
+
             for (String region : targetRegions) {
                 System.out.println("\n========================================");
                 System.out.println(">>> [" + region + "] 수집 시작...");
                 System.out.println("========================================");
 
-                // 1. 매 지역 시작 시 페이지 새로고침하여 상태 초기화
                 driver.get("https://ictmarket.or.kr:8443/find/find_01.do");
                 Thread.sleep(2000);
 
-                // 2. 지역 선택 및 검색
                 WebElement sidoSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.id("SIDO_CD")));
                 new Select(sidoSelect).selectByValue(region);
                 Thread.sleep(1000);
@@ -46,72 +46,77 @@ public class IctMarketService {
                 ));
                 js.executeScript("arguments[0].click();", searchBtn);
 
-                // 3. 페이지네이션 루프
                 boolean hasNext = true;
                 int pageCount = 1;
-                int lastPageNum = 0; // 무한 루프 방지용 변수
+                int lastPageNum = 0;
 
                 while (hasNext) {
                     System.out.print(">>> " + region + " [" + pageCount + "] 페이지 수집 중... ");
 
-                    // 데이터 로딩 대기
+                    // [보강] 데이터 행이 실제로 존재할 때까지 대기
                     wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.className("form01")));
                     Thread.sleep(1500);
 
-                    // 현재 페이지 데이터 저장
-                    int savedCount = parseAndSaveResults(region);
+                    // 현재 페이지 파싱 및 저장 (건수 반환)
+                    int savedInPage = parseAndSaveResults(region);
+                    totalSaved += savedInPage;
 
-                    // 현재 페이지 번호 가져오기
                     int currentPageNum = getCurrentPageNumber();
-                    System.out.println("성공 (" + savedCount + "건 저장 / 현재 페이지: " + currentPageNum + ")");
+                    System.out.println("완료 (" + savedInPage + "건 신규 저장 / 현재 총합: " + totalSaved + ")");
 
-                    // [핵심] 페이지 번호가 전과 같다면 마지막 페이지임
+                    // 마지막 페이지 검증
                     if (pageCount > 1 && currentPageNum == lastPageNum) {
-                        System.out.println(">>> [" + region + "] 모든 페이지 수집 완료. 다음 지역으로 이동합니다.");
+                        System.out.println(">>> [" + region + "] 수집 완료.");
                         break;
                     }
                     lastPageNum = currentPageNum;
 
-                    // 다음 페이지로 이동 시도
                     hasNext = goToNextPage(wait, js);
                     pageCount++;
-
-                    // 안전을 위한 강제 종료 조건 (경남 115페이지 등 비정상 상황 대비)
-                    if (pageCount > 500) break;
+                    if (pageCount > 600) break; // 안전장치
                 }
-                System.out.println(">>> [" + region + "] 구역 종료.");
-                Thread.sleep(3000); // 지역 전환 시 세션 안정화를 위해 길게 대기
+                Thread.sleep(3000);
             }
-            System.out.println("\n>>> [전체 완료] 모든 지역 수집이 끝났습니다!");
+            System.out.println("\n>>> [최종 완료] 총 " + totalSaved + "건의 새로운 데이터가 추가되었습니다.");
 
         } catch (Exception e) {
-            System.err.println(">>> 크롤링 중 오류: " + e.getMessage());
+            System.err.println(">>> 치명적 오류: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     @Transactional
     protected int parseAndSaveResults(String region) {
+        // 테이블 내 모든 데이터 행 추출
         List<WebElement> rows = driver.findElements(By.cssSelector("div.form01.text-center"));
-        int count = 0;
+        int savedCount = 0;
+
         for (WebElement row : rows) {
             try {
+                // 업체명과 주소 추출
                 String dealerName = row.findElement(By.cssSelector(".col-md-3")).getText().trim();
                 String address = row.findElement(By.cssSelector(".col-md-6")).getText().trim();
 
                 if (!dealerName.isEmpty() && !address.isEmpty()) {
+                    // [중복 체크] 이름과 주소가 모두 같을 때만 스킵
                     if (!dealerRepository.existsByDealerNameAndAddress(dealerName, address)) {
                         dealerRepository.save(CertifiedDealer.builder()
                                 .sido(region)
                                 .dealerName(dealerName)
                                 .address(address)
                                 .build());
-                        count++;
+                        savedCount++;
                     }
+                } else {
+                    System.err.print("[누락: 데이터 빈칸] ");
                 }
-            } catch (Exception ignored) {}
+            } catch (NoSuchElementException e) {
+                // 데이터 행이 아닌 헤더 등은 무시
+            } catch (Exception e) {
+                System.err.print("[오류: " + e.getMessage() + "] ");
+            }
         }
-        return count;
+        return savedCount;
     }
 
     private int getCurrentPageNumber() {
@@ -127,7 +132,6 @@ public class IctMarketService {
             int currentPage = getCurrentPageNumber();
             int nextPage = currentPage + 1;
 
-            // 1. 다음 숫자 버튼 찾기
             List<WebElement> pageLinks = driver.findElements(By.cssSelector("p.pageNum a"));
             for (WebElement link : pageLinks) {
                 if (link.getText().trim().equals(String.valueOf(nextPage))) {
@@ -136,15 +140,14 @@ public class IctMarketService {
                 }
             }
 
-            // 2. 숫자가 없으면 '다음페이지(>)' 화살표 버튼 찾기
             try {
                 WebElement nextBtnImg = driver.findElement(By.cssSelector("p.pageNum a img[alt='다음페이지']"));
                 WebElement nextLink = nextBtnImg.findElement(By.xpath(".."));
                 js.executeScript("arguments[0].click();", nextLink);
-                Thread.sleep(2000); // 화살표 클릭 후 로딩 시간 충분히 부여
+                Thread.sleep(2500); // 페이지 전환 대기시간 증가
                 return true;
             } catch (NoSuchElementException e) {
-                return false; // 진짜 마지막 페이지
+                return false;
             }
         } catch (Exception e) {
             return false;
