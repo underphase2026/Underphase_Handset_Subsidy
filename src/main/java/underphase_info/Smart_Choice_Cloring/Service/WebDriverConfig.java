@@ -21,7 +21,7 @@ public class WebDriverConfig {
         options.setExperimentalOption("useAutomationExtension", false);
 
         // 현재 Mac 환경이므로 headless는 주석 처리하여 눈으로 확인합니다.
-        // options.addArguments("--headless");
+         options.addArguments("--headless");
 
         return new ChromeDriver(options);
     }

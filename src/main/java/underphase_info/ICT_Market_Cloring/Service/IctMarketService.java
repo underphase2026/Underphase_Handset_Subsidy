@@ -19,9 +19,6 @@ public class IctMarketService {
     private final CertifiedDealerRepository dealerRepository;
     private final WebDriver driver;
 
-    /**
-     * 전체 지역 크롤링 실행
-     */
     public void crawlCertifiedDealers() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         JavascriptExecutor js = (JavascriptExecutor) driver;
@@ -30,8 +27,6 @@ public class IctMarketService {
         String[] targetRegions = {"경상남도", "울산광역시", "부산광역시"};
 
         try {
-            dealerRepository.deleteAll(); // 시작 시 초기화
-
             for (String region : targetRegions) {
                 System.out.println("\n========================================");
                 System.out.println(">>> [" + region + "] 수집 시작...");
