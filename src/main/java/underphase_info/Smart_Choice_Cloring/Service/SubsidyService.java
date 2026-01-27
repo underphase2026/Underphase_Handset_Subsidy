@@ -1,3 +1,185 @@
+//package underphase_info.Smart_Choice_Cloring.Service;
+//
+//import underphase_info.Smart_Choice_Cloring.Entity.Subsidy;
+//import underphase_info.Smart_Choice_Cloring.Repository.SubsidyRepository;
+//import jakarta.transaction.Transactional;
+//import lombok.RequiredArgsConstructor;
+//import org.openqa.selenium.*;
+//import org.openqa.selenium.support.ui.ExpectedConditions;
+//import org.openqa.selenium.support.ui.Select;
+//import org.openqa.selenium.support.ui.WebDriverWait;
+//import org.springframework.stereotype.Service;
+//
+//import java.time.Duration;
+//import java.util.ArrayList;
+//import java.util.List;
+//
+//@Service
+//@RequiredArgsConstructor
+//public class SubsidyService {
+//    private final SubsidyRepository subsidyRepository;
+//    private final WebDriver driver;
+//    private final String TARGET_URL = "https://m.smartchoice.or.kr/smc/mobile/dantongList.do?type=m";
+//
+//    @Transactional
+//    public void crawlAndSaveSubsidies() {
+//        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+//        JavascriptExecutor js = (JavascriptExecutor) driver;
+//
+//        try {
+//            driver.get(TARGET_URL);
+//
+//            // 1. 제조사 리스트 확보
+//            wait.until(ExpectedConditions.presenceOfElementLocated(By.id("dan_Mau")));
+//            List<WebElement> makerOptions = new Select(driver.findElement(By.id("dan_Mau"))).getOptions();
+//            List<String> makerNames = new ArrayList<>();
+//            for (WebElement opt : makerOptions) {
+//                String text = opt.getText().trim();
+//                if (!text.contains("제조사") && !text.isEmpty() && !text.equals("기타")) {
+//                    makerNames.add(text);
+//                }
+//            }
+//
+//            for (String makerName : makerNames) {
+//                System.out.println("\n>>> [" + makerName + "] 수집 시작...");
+//
+//                for (int attempt = 0; attempt < 1000; attempt++) {
+//                    try {
+//                        // 세션 유효성 체크
+//                        driver.getCurrentUrl();
+//
+//                        driver.get(TARGET_URL);
+//                        WebElement makerSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.id("dan_Mau")));
+//                        new Select(makerSelect).selectByVisibleText(makerName);
+//                        Thread.sleep(800);
+//
+//                        WebElement prodBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("product_btn")));
+//                        js.executeScript("arguments[0].click();", prodBtn);
+//
+//                        wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.id("spanPhone_name")));
+//                        List<WebElement> phones = driver.findElements(By.id("spanPhone_name"));
+//
+//                        if (attempt >= phones.size()) break;
+//
+//                        WebElement targetPhone = phones.get(attempt);
+//                        String phoneName = targetPhone.getText();
+//
+//                        // [핵심 추가] DB에 해당 기기 데이터가 이미 있다면 스킵 (시간 절약)
+//                        if (subsidyRepository.existsByDeviceName(phoneName)) {
+//                            System.out.println(">>> (" + (attempt + 1) + "/" + phones.size() + ") [" + phoneName + "] 이미 존재하여 스킵합니다.");
+//                            continue;
+//                        }
+//
+//                        System.out.print(">>> (" + (attempt + 1) + "/" + phones.size() + ") [" + phoneName + "] 수집 중... ");
+//
+//                        js.executeScript("arguments[0].click();", targetPhone);
+//                        Thread.sleep(300);
+//                        js.executeScript("arguments[0].click();", driver.findElement(By.id("selectPhone")));
+//
+//                        Thread.sleep(800);
+//                        handleAlert();
+//
+//                        String planId = phoneName.contains("LTE") ? "planLTEChoice" : "plan5GChoice";
+//                        try {
+//                            WebElement planSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.id(planId)));
+//                            new Select(planSelect).selectByValue("all");
+//                        } catch (Exception e) {
+//                            js.executeScript("document.querySelectorAll('select[id*=\"Choice\"]').forEach(s => s.value = 'all')");
+//                        }
+//
+//                        js.executeScript("danAllSearch('mobile');");
+//                        handleAlert();
+//
+//                        wait.until(ExpectedConditions.presenceOfElementLocated(By.className("dantong_resultbox")));
+//                        parseAndSave(phoneName, makerName);
+//                        System.out.println("성공!");
+//
+//                    } catch (WebDriverException e) {
+//                        if (e.getMessage().contains("invalid session id") || e.getMessage().contains("no such window")) {
+//                            System.err.println("\n>>> [치명적 오류] 브라우저 세션이 종료되었습니다. 크롤링을 중단합니다.");
+//                            return;
+//                        }
+//                        System.out.println("실패 (사유: " + e.getMessage().split(":")[0] + ")");
+//                        handleAlert();
+//                    } catch (Exception e) {
+//                        System.out.println("실패 (일반 오류: " + e.getClass().getSimpleName() + ")");
+//                    }
+//                }
+//            }
+//        } catch (Exception e) {
+//            System.err.println(">>> 전체 프로세스 오류: " + e.getMessage());
+//        }
+//    }
+//
+//    private void handleAlert() {
+//        try {
+//            Alert alert = driver.switchTo().alert();
+//            alert.dismiss();
+//        } catch (Exception ignored) {}
+//    }
+//
+//    private void parseAndSave(String phoneName, String makerName) {
+//        List<WebElement> resultBlocks = driver.findElements(By.className("dantong_resultbox"));
+//        for (WebElement block : resultBlocks) {
+//            List<WebElement> rows = block.findElements(By.tagName("tr"));
+//            String currentRange = "구간확인";
+//            String currentPlanName = "알수없음";
+//
+//            for (WebElement row : rows) {
+//                List<WebElement> ths = row.findElements(By.tagName("th"));
+//                List<WebElement> tds = row.findElements(By.tagName("td"));
+//
+//                if (ths.isEmpty() || tds.isEmpty()) continue;
+//
+//                StringBuilder rowHeaderBuilder = new StringBuilder();
+//                for (WebElement th : ths) rowHeaderBuilder.append(th.getText()).append(" ");
+//                String rowHeaderText = rowHeaderBuilder.toString();
+//
+//                if (rowHeaderText.contains("만원")) {
+//                    currentRange = rowHeaderText.trim();
+//                    try {
+//                        WebElement nameSpan = row.findElement(By.cssSelector("span.name"));
+//                        currentPlanName = nameSpan.getText().trim();
+//                    } catch (NoSuchElementException ignored) {
+//                    }
+//                }
+//
+//                String supportType = null;
+//                if (rowHeaderText.contains("번호이동")) supportType = "번호이동";
+//                else if (rowHeaderText.contains("기기변경")) supportType = "기기변경";
+//
+//                if (supportType != null && tds.size() >= 3) {
+//                    int size = tds.size();
+//                    saveSubsidy(makerName, phoneName, currentPlanName, currentRange, supportType, "SKT", tds.get(size - 3).getText());
+//                    saveSubsidy(makerName, phoneName, currentPlanName, currentRange, supportType, "KT", tds.get(size - 2).getText());
+//                    saveSubsidy(makerName, phoneName, currentPlanName, currentRange, supportType, "LGU+", tds.get(size - 1).getText());
+//                }
+//            }
+//        }
+//    }
+//
+//    private void saveSubsidy(String maker, String device, String plan, String range, String type, String telecom, String amount) {
+//        if (amount == null || amount.isEmpty() || amount.contains("-") || amount.contains("해당사항")) return;
+//
+//        String cleanAmount = amount.replaceAll("[^0-9]", "");
+//        if (cleanAmount.isEmpty()) return;
+//
+//        if (!subsidyRepository.existsByMakerAndDeviceNameAndPlanNameAndPlanRangeAndSupportTypeAndTelecom(
+//                maker, device, plan, range, type, telecom)) {
+//
+//            subsidyRepository.save(Subsidy.builder()
+//                    .maker(maker)
+//                    .deviceName(device)
+//                    .planName(plan)
+//                    .planRange(range)
+//                    .supportType(type)
+//                    .telecom(telecom)
+//                    .supportAmount(cleanAmount)
+//                    .build());
+//        }
+//    }
+//}
+
 package underphase_info.Smart_Choice_Cloring.Service;
 
 import underphase_info.Smart_Choice_Cloring.Entity.Subsidy;
@@ -29,22 +211,38 @@ public class SubsidyService {
         try {
             driver.get(TARGET_URL);
 
+            // 1. 제조사 리스트 확보
             wait.until(ExpectedConditions.presenceOfElementLocated(By.id("dan_Mau")));
             List<WebElement> makerOptions = new Select(driver.findElement(By.id("dan_Mau"))).getOptions();
             List<String> makerNames = new ArrayList<>();
+
+            // [핵심 수정] 애플부터 시작하기 위한 플래그 설정
+            boolean foundApple = false;
+
             for (WebElement opt : makerOptions) {
                 String text = opt.getText().trim();
-                if (!text.contains("제조사") && !text.isEmpty() && !text.equals("기타")) {
+
+                // '애플' 글자가 보이면 그때부터 플래그를 true로 변경
+                if (text.contains("애플")) {
+                    foundApple = true;
+                }
+
+                // 플래그가 true일 때만 리스트에 담음 (삼성 등 이전 제조사 제외)
+                if (foundApple && !text.isEmpty() && !text.equals("기타")) {
                     makerNames.add(text);
                 }
             }
+
+            System.out.println(">>> 애플부터 수집 시작 (수집 대상: " + makerNames + ")");
 
             for (String makerName : makerNames) {
                 System.out.println("\n>>> [" + makerName + "] 수집 시작...");
 
                 for (int attempt = 0; attempt < 1000; attempt++) {
                     try {
+                        driver.getCurrentUrl();
                         driver.get(TARGET_URL);
+
                         WebElement makerSelect = wait.until(ExpectedConditions.presenceOfElementLocated(By.id("dan_Mau")));
                         new Select(makerSelect).selectByVisibleText(makerName);
                         Thread.sleep(800);
@@ -59,6 +257,13 @@ public class SubsidyService {
 
                         WebElement targetPhone = phones.get(attempt);
                         String phoneName = targetPhone.getText();
+
+                        // DB 존재 시 기기 단위 스킵 로직 병행
+                        if (subsidyRepository.existsByDeviceName(phoneName)) {
+                            System.out.println(">>> (" + (attempt + 1) + "/" + phones.size() + ") [" + phoneName + "] 스킵");
+                            continue;
+                        }
+
                         System.out.print(">>> (" + (attempt + 1) + "/" + phones.size() + ") [" + phoneName + "] 수집 중... ");
 
                         js.executeScript("arguments[0].click();", targetPhone);
@@ -83,14 +288,20 @@ public class SubsidyService {
                         parseAndSave(phoneName, makerName);
                         System.out.println("성공!");
 
-                    } catch (Exception e) {
+                    } catch (WebDriverException e) {
+                        if (e.getMessage().contains("invalid session id") || e.getMessage().contains("no such window")) {
+                            System.err.println("\n>>> [치명적 오류] 세션 종료로 중단합니다.");
+                            return;
+                        }
                         System.out.println("실패 (사유: " + e.getMessage().split(":")[0] + ")");
                         handleAlert();
+                    } catch (Exception e) {
+                        System.out.println("실패 (일반 오류: " + e.getClass().getSimpleName() + ")");
                     }
                 }
             }
         } catch (Exception e) {
-            System.err.println(">>> 치명적 오류: " + e.getMessage());
+            System.err.println(">>> 전체 프로세스 오류: " + e.getMessage());
         }
     }
 
@@ -146,7 +357,6 @@ public class SubsidyService {
         String cleanAmount = amount.replaceAll("[^0-9]", "");
         if (cleanAmount.isEmpty()) return;
 
-        // [중복 체크] DB에 동일한 데이터가 없을 때만 저장
         if (!subsidyRepository.existsByMakerAndDeviceNameAndPlanNameAndPlanRangeAndSupportTypeAndTelecom(
                 maker, device, plan, range, type, telecom)) {
 
