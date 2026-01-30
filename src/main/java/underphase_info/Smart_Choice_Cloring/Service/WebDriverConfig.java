@@ -16,20 +16,19 @@ public class WebDriverConfig {
         WebDriverManager.chromedriver().setup();
         ChromeOptions options = new ChromeOptions();
 
-        // 1. 기본 Headless 및 리눅스 서버 설정
-        options.addArguments("--headless");
+        // 1. 최신 Headless 모드 강제 적용 (창 띄움 방지 강화)
+        options.addArguments("--headless=new");
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
 
-        // 2. [추가] 메모리 및 CPU 최적화 설정
-        options.addArguments("--disable-gpu");            // GPU 가속 비활성화
-        options.addArguments("--disable-extensions");     // 확장 프로그램 비활성화
-        options.addArguments("--blink-settings=imagesEnabled=false"); // 이미지 로딩 방지 (메모리 절약)
-        options.addArguments("--incognito");             // 시크릿 모드 실행 (캐시 누적 방지)
+        // 2. 메모리 최적화 및 팝업 방지
+        options.addArguments("--disable-gpu");
+        options.addArguments("--blink-settings=imagesEnabled=false");
+        options.addArguments("--disable-popup-blocking"); // 팝업 차단으로 리소스 보호
+        options.addArguments("--memory-pressure-off");    // 메모리 압박 시 강제 종료 방지
 
-        // 3. 자동화 감지 회피
-        options.setExperimentalOption("excludeSwitches", Collections.singletonList("enable-automation"));
-        options.setExperimentalOption("useAutomationExtension", false);
+        // 3. User-Agent 설정 (서버가 자동화 도구를 더 잘 받아들이도록 함)
+        options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
         return new ChromeDriver(options);
     }
