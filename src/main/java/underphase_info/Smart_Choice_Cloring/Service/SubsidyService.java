@@ -29,7 +29,7 @@ public class SubsidyService {
     private final ChromeOptions chromeOptions; // 변경: WebDriver 대신 Options 주입
     private final String TARGET_URL = "https://m.smartchoice.or.kr/smc/mobile/dantongList.do?type=m";
 
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "0 0 13 * * MON-FRI")
     @Transactional
     public void crawlAndSaveSubsidies() {
         log.info(">>> [스케줄러 시작] 공시지원금 데이터 동기화 작업을 시작합니다.");
