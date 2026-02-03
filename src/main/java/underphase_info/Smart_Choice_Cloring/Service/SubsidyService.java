@@ -6,6 +6,8 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.*;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -24,7 +26,7 @@ import java.util.Map;
 @Slf4j
 public class SubsidyService {
     private final SubsidyRepository subsidyRepository;
-    private final WebDriver driver;
+    private final ChromeOptions chromeOptions; // 변경: WebDriver 대신 Options 주입
     private final String TARGET_URL = "https://m.smartchoice.or.kr/smc/mobile/dantongList.do?type=m";
 
     @Scheduled(cron = "0 * * * * *")
@@ -36,10 +38,12 @@ public class SubsidyService {
         Map<String, Subsidy> existingSubsidies = loadExistingSubsidies();
         log.info(">>> 현재 DB 내 데이터 수: {}개", existingSubsidies.size());
 
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        JavascriptExecutor js = (JavascriptExecutor) driver;
-
+        WebDriver driver = null;
         try {
+            driver = new ChromeDriver(chromeOptions); // 매 요청마다 새 브라우저 생성
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+
             driver.get(TARGET_URL);
 
             // 1. 제조사 리스트 확보
@@ -49,6 +53,7 @@ public class SubsidyService {
 
             for (WebElement opt : makerOptions) {
                 String text = opt.getText().trim();
+                // 제조사 필터링 (삼성, 애플만)
                 if (text.contains("삼성") || text.contains("애플")) {
                     makerNames.add(text);
                 }
@@ -88,7 +93,7 @@ public class SubsidyService {
                         js.executeScript("arguments[0].click();", driver.findElement(By.id("selectPhone")));
 
                         Thread.sleep(800);
-                        handleAlert();
+                        handleAlert(driver);
 
                         String planId = phoneName.contains("LTE") ? "planLTEChoice" : "plan5GChoice";
                         try {
@@ -101,12 +106,12 @@ public class SubsidyService {
                         }
 
                         js.executeScript("danAllSearch('mobile');");
-                        handleAlert();
+                        handleAlert(driver);
 
                         wait.until(ExpectedConditions.presenceOfElementLocated(By.className("dantong_resultbox")));
 
                         // 현재 페이지의 데이터 파싱 및 Sync 처리
-                        parseAndSync(phoneName, makerName, existingSubsidies);
+                        parseAndSync(driver, phoneName, makerName, existingSubsidies);
 
                     } catch (WebDriverException e) {
                         if (e.getMessage().contains("invalid session id")
@@ -115,7 +120,7 @@ public class SubsidyService {
                             throw e; // 상위로 던져서 리소스 정리
                         }
                         log.warn(">>> 항목 수집 실패 (사유: {})", e.getMessage().split(":")[0]);
-                        handleAlert();
+                        handleAlert(driver);
                     } catch (Exception e) {
                         log.warn(">>> 항목 수집 실패 (일반 오류: {})", e.getClass().getSimpleName());
                     }
@@ -136,11 +141,15 @@ public class SubsidyService {
 
         } catch (Exception e) {
             log.error(">>> 전체 프로세스 오류: ", e);
+        } finally {
+            if (driver != null) {
+                try {
+                    driver.quit(); // 브라우저 완전 종료 (리소스 반환)
+                } catch (Exception e) {
+                    log.error(">>> 브라우저 종료 중 오류 발생: ", e);
+                }
+            }
         }
-        // 주의: 스케줄러에서는 System.exit(0)이나 driver.quit()를 호출하면 안 됨 (다음 스케줄을 위해 유지하거나, 빈 종료
-        // 시점에 처리)
-        // 여기서는 driver가 빈으로 관리되므로 메서드 종료 시 브라우저를 닫지 않고 유지할지, 아니면 매번 새로 띄울지에 따라 다르나
-        // 현재 구조상 주입받은 driver를 계속 재사용한다고 가정.
     }
 
     private Map<String, Subsidy> loadExistingSubsidies() {
@@ -157,7 +166,7 @@ public class SubsidyService {
         return maker + "|" + device + "|" + plan + "|" + range + "|" + type + "|" + telecom;
     }
 
-    private void handleAlert() {
+    private void handleAlert(WebDriver driver) {
         try {
             Alert alert = driver.switchTo().alert();
             alert.dismiss();
@@ -165,7 +174,8 @@ public class SubsidyService {
         }
     }
 
-    private void parseAndSync(String phoneName, String makerName, Map<String, Subsidy> existingSubsidies) {
+    private void parseAndSync(WebDriver driver, String phoneName, String makerName,
+            Map<String, Subsidy> existingSubsidies) {
         List<WebElement> resultBlocks = driver.findElements(By.className("dantong_resultbox"));
         for (WebElement block : resultBlocks) {
             List<WebElement> rows = block.findElements(By.tagName("tr"));

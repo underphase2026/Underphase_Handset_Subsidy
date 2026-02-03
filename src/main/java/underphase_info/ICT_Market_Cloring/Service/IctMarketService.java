@@ -4,6 +4,8 @@ import underphase_info.ICT_Market_Cloring.Entity.CertifiedDealer;
 import underphase_info.ICT_Market_Cloring.Repository.CertifiedDealerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.Select;
@@ -17,15 +19,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class IctMarketService {
     private final CertifiedDealerRepository dealerRepository;
-    private final WebDriver driver;
+    private final ChromeOptions chromeOptions; // WebDriver 대신 ChromeOptions 주입
 
     public void crawlCertifiedDealers() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        JavascriptExecutor js = (JavascriptExecutor) driver;
-
-        String[] targetRegions = {"경상남도", "울산광역시", "부산광역시"};
-
+        WebDriver driver = null;
         try {
+            driver = new ChromeDriver(chromeOptions);
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+
+            String[] targetRegions = { "경상남도", "울산광역시", "부산광역시" };
+
             // 전체 수집 건수 카운트
             int totalSaved = 0;
 
@@ -42,8 +46,7 @@ public class IctMarketService {
                 Thread.sleep(1000);
 
                 WebElement searchBtn = wait.until(ExpectedConditions.elementToBeClickable(
-                        By.xpath("//button[contains(@onclick, 'getAgentListNM()')]")
-                ));
+                        By.xpath("//button[contains(@onclick, 'getAgentListNM()')]")));
                 js.executeScript("arguments[0].click();", searchBtn);
 
                 boolean hasNext = true;
@@ -58,10 +61,10 @@ public class IctMarketService {
                     Thread.sleep(1500);
 
                     // 현재 페이지 파싱 및 저장 (건수 반환)
-                    int savedInPage = parseAndSaveResults(region);
+                    int savedInPage = parseAndSaveResults(driver, region);
                     totalSaved += savedInPage;
 
-                    int currentPageNum = getCurrentPageNumber();
+                    int currentPageNum = getCurrentPageNumber(driver);
                     System.out.println("완료 (" + savedInPage + "건 신규 저장 / 현재 총합: " + totalSaved + ")");
 
                     // 마지막 페이지 검증
@@ -71,9 +74,10 @@ public class IctMarketService {
                     }
                     lastPageNum = currentPageNum;
 
-                    hasNext = goToNextPage(wait, js);
+                    hasNext = goToNextPage(driver, wait, js);
                     pageCount++;
-                    if (pageCount > 600) break; // 안전장치
+                    if (pageCount > 600)
+                        break; // 안전장치
                 }
                 Thread.sleep(3000);
             }
@@ -82,11 +86,19 @@ public class IctMarketService {
         } catch (Exception e) {
             System.err.println(">>> 치명적 오류: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            if (driver != null) {
+                try {
+                    driver.quit();
+                } catch (Exception e) {
+                    System.err.println(">>> 브라우저 종료 중 오류: " + e.getMessage());
+                }
+            }
         }
     }
 
     @Transactional
-    protected int parseAndSaveResults(String region) {
+    protected int parseAndSaveResults(WebDriver driver, String region) {
         // 테이블 내 모든 데이터 행 추출
         List<WebElement> rows = driver.findElements(By.cssSelector("div.form01.text-center"));
         int savedCount = 0;
@@ -119,7 +131,7 @@ public class IctMarketService {
         return savedCount;
     }
 
-    private int getCurrentPageNumber() {
+    private int getCurrentPageNumber(WebDriver driver) {
         try {
             return Integer.parseInt(driver.findElement(By.cssSelector("p.pageNum b")).getText().trim());
         } catch (Exception e) {
@@ -127,9 +139,9 @@ public class IctMarketService {
         }
     }
 
-    private boolean goToNextPage(WebDriverWait wait, JavascriptExecutor js) {
+    private boolean goToNextPage(WebDriver driver, WebDriverWait wait, JavascriptExecutor js) {
         try {
-            int currentPage = getCurrentPageNumber();
+            int currentPage = getCurrentPageNumber(driver);
             int nextPage = currentPage + 1;
 
             List<WebElement> pageLinks = driver.findElements(By.cssSelector("p.pageNum a"));
