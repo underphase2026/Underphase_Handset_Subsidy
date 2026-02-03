@@ -2,8 +2,10 @@ package underphase_info; // 패키지 경로를 폴더 이름과 일치시킵니
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 public class UnderphaseHandsetSubsidyApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(UnderphaseHandsetSubsidyApplication.class, args);

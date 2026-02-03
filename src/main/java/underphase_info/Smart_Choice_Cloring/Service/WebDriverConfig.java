@@ -25,10 +25,11 @@ public class WebDriverConfig {
         options.addArguments("--disable-gpu");
         options.addArguments("--blink-settings=imagesEnabled=false");
         options.addArguments("--disable-popup-blocking"); // 팝업 차단으로 리소스 보호
-        options.addArguments("--memory-pressure-off");    // 메모리 압박 시 강제 종료 방지
+        options.addArguments("--memory-pressure-off"); // 메모리 압박 시 강제 종료 방지
 
         // 3. User-Agent 설정 (서버가 자동화 도구를 더 잘 받아들이도록 함)
-        options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        options.addArguments(
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
         return new ChromeDriver(options);
     }
