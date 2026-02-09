@@ -16,7 +16,7 @@ public class WebDriverConfig {
         ChromeOptions options = new ChromeOptions();
 
         // 1. 최신 Headless 모드 강제 적용
-        options.addArguments("--headless=new");
+        // options.addArguments("--headless=new");
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
 
@@ -33,8 +33,6 @@ public class WebDriverConfig {
         return options;
     }
 
-    @Bean(destroyMethod = "quit") // 앱이 꺼질 때 브라우저를 확실히 닫아줍니다 (서버 과부하 방지)
-    public WebDriver webDriver(ChromeOptions options) {
-        return new ChromeDriver(options);
-    }
+    // WebDriver Bean 제거함 - 각 서비스에서 필요할 때만 생성하고 종료하는 방식으로 변경
+    // 이렇게 하면 앱 시작 시 브라우저가 뜨지 않음
 }

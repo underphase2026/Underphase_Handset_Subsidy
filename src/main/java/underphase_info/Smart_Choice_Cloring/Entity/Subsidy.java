@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
@@ -14,14 +15,19 @@ public class Subsidy {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String maker;         // 제조사
-    private String deviceName;    // 기기명
-    private String telecom;       // 통신사
-    private String planName;      // [수정] 요금제 이름 (예: 컴팩트, 슬림)
-    private String planRange;     // 요금제 구간 (예: 10만원 이상)
-    private String supportType;   // 지원 유형 (번호이동 / 기기변경)
-    private String supportAmount; // 지원금
+    private String maker;
+    private String deviceName;
+    private String telecom;
+    private String planName;
+    private String planRange;
+    private String supportType;
+    private String supportAmount;
 
     @Builder.Default
     private LocalDateTime crawledAt = LocalDateTime.now();
+
+    public void updateAmount(String newAmount) {
+        this.supportAmount = newAmount;
+        this.crawledAt = LocalDateTime.now();
+    }
 }
