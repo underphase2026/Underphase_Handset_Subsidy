@@ -1,18 +1,20 @@
 # ==========================================
-# Stage 1: Gradle 빌드
+# Stage 1: Gradle Wrapper로 빌드
 # ==========================================
-FROM gradle:8.12-jdk17 AS builder
+FROM eclipse-temurin:17-jdk AS builder
 
 WORKDIR /app
 
-# Gradle 캐싱을 위해 의존성 파일 먼저 복사
-COPY build.gradle settings.gradle ./
+# Gradle Wrapper + 의존성 파일 먼저 복사 (캐싱)
+COPY gradlew ./
 COPY gradle ./gradle
-RUN gradle dependencies --no-daemon || true
+COPY build.gradle settings.gradle ./
+RUN chmod +x gradlew
+RUN ./gradlew dependencies --no-daemon || true
 
 # 소스 복사 & 빌드
 COPY src ./src
-RUN gradle bootJar --no-daemon -x test
+RUN ./gradlew bootJar --no-daemon -x test
 
 # ==========================================
 # Stage 2: 런타임 (Ubuntu + Java 17 + Chrome)
