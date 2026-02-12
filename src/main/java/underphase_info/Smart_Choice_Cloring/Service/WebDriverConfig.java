@@ -15,8 +15,8 @@ public class WebDriverConfig {
         WebDriverManager.chromedriver().setup();
         ChromeOptions options = new ChromeOptions();
 
-        // 1. 최신 Headless 모드 강제 적용
-        // options.addArguments("--headless=new");
+        // 1. Headless 모드 (서버 배포 시 필수)
+        options.addArguments("--headless=new");
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
 
