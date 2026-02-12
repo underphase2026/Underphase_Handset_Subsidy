@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    container_name: underphase-subsidy
+    env_file:
+      - .env
+    network_mode: host
+    restart: unless-stopped
+    shm_size: '2gb'
+    volumes:
+      - ./logs:/app/logs
